@@ -6,6 +6,11 @@ class taskcreate(BaseModel):
     title: str
 
 
+class TaskUpdate(BaseModel):
+    title: str | None = None
+    done: bool | None = None
+
+
 app = FastAPI()
 
 tasks = [
@@ -52,3 +57,40 @@ async def create_task(task: taskcreate):
         "done": False}
     tasks.append(new_task)
     return new_task
+
+
+@app.put("/tasks/{id}")
+async def update_task(id: int, task: TaskUpdate):
+    for existing_task in tasks:
+        if existing_task["id"] == id:
+
+            if task.title is not None:
+                if not task.title.strip():
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Title cannot be empty"
+                    )
+                existing_task["title"] = task.title
+
+            if task.done is not None:
+                existing_task["done"] = task.done
+
+            return existing_task
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Task {id} not found"
+    )
+
+
+@app.delete("/tasks/{id}", status_code=204)
+async def delete_task(id: int):
+    for i, task in enumerate(tasks):
+        if task["id"] == id:
+            tasks.pop(i)
+            return
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Task {id} not found"
+    )

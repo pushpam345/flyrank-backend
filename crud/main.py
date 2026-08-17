@@ -11,7 +11,11 @@ class TaskUpdate(BaseModel):
     done: bool | None = None
 
 
-app = FastAPI()
+app = FastAPI(
+    title="Task API",
+    description="A simple CRUD API for managing tasks.",
+    version="1.0.0"
+)
 
 tasks = [
     {"id": 1, "title": "Learn FastAPI", "done": False},
@@ -30,12 +34,20 @@ async def yaan():
     return {"status": "ok"}
 
 
-@app.get("/tasks")
+@app.get(
+    "/tasks",
+    summary="Get all tasks",
+    description="Returns all tasks stored in memory."
+)
 async def task():
-    return {"tasks": tasks}
+    return tasks
 
 
-@app.get("/tasks/{id}")
+@app.get(
+    "/tasks/{id}",
+    summary="Get a task",
+    description="Returns a single task by its ID."
+)
 async def taskget(id: int):
 
     for i in tasks:
@@ -44,7 +56,12 @@ async def taskget(id: int):
     raise HTTPException(status_code=404, detail=f"id {id} not found ")
 
 
-@app.post("/tasks", status_code=201)
+@app.post(
+    "/tasks",
+    status_code=201,
+    summary="Create a task",
+    description="Creates a new task with a title."
+)
 async def create_task(task: taskcreate):
     if not task.title.strip():
         raise HTTPException(
@@ -59,7 +76,11 @@ async def create_task(task: taskcreate):
     return new_task
 
 
-@app.put("/tasks/{id}")
+@app.put(
+    "/tasks/{id}",
+    summary="Update a task",
+    description="Updates the title and/or completion status of a task."
+)
 async def update_task(id: int, task: TaskUpdate):
     for existing_task in tasks:
         if existing_task["id"] == id:
@@ -83,7 +104,12 @@ async def update_task(id: int, task: TaskUpdate):
     )
 
 
-@app.delete("/tasks/{id}", status_code=204)
+@app.delete(
+    "/tasks/{id}",
+    status_code=204,
+    summary="Delete a task",
+    description="Deletes a task by its ID."
+)
 async def delete_task(id: int):
     for i, task in enumerate(tasks):
         if task["id"] == id:

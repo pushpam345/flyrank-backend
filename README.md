@@ -36,9 +36,8 @@ task-api/
 Clone the repository:
 
 ```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
-cd <YOUR_PROJECT_FOLDER>
-```
+git clone https://github.com/pushpam345/flyrank-backend.git
+cd flyrank-backend
 
 Create a virtual environment:
 

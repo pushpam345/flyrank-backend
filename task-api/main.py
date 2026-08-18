@@ -1,5 +1,42 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+import sqlite3
+
+DB_NAME = "tasks.db"
+
+
+def get_db():
+    return sqlite3.connect(DB_NAME)
+
+
+def create_table():
+    conn = get_db()
+    conn.execute(""" CREATE TABLE IF NOT EXISTS tasks(
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     title TEXT NOT NULL,
+                     done INTEGER NOT NULL)
+                      """)
+    conn.commit()
+    conn.close()
+
+
+def seed_tasks():
+    conn = get_db()
+    count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+    if count == 0:
+        example_tasks = [
+            ("Learn FastAPI", 0),
+            ("Build CRUD API", 0),
+            ("Push project to GitHub", 0)
+        ]
+        conn.executemany(
+            "INSERT INTO tasks(title,done)VALUES (?,?)", example_tasks)
+        conn.commit()
+    conn.close()
+
+
+create_table()
+seed_tasks()
 
 
 class taskcreate(BaseModel):

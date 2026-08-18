@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+
 from pydantic import BaseModel
 import sqlite3
 
@@ -68,7 +70,7 @@ async def yaan():
 @app.get(
     "/tasks",
     summary="Get all tasks",
-    description="Returns all tasks stored in memory."
+    description="Returns all tasks stored in SQLite."
 )
 async def get_task():
     conn = get_db()
@@ -92,7 +94,10 @@ async def get_task(id: int):
     row = conn.execute("SELECT * FROM tasks where id = ?", (id,)).fetchone()
     conn.close()
     if row is None:
-        raise HTTPException(status_code=404, detail=f"id {id} not found ")
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"Task {id} not found"}
+        )
     return {
         "id": row[0],
         "title": row[1],

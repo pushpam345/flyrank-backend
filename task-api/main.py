@@ -54,12 +54,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-tasks = [
-    {"id": 1, "title": "Learn FastAPI", "done": False},
-    {"id": 2, "title": "Build CRUD API", "done": False},
-    {"id": 3, "title": "Push project to GitHub", "done": False}
-]
-
 
 @app.get("/")
 async def hello():
@@ -76,7 +70,15 @@ async def yaan():
     summary="Get all tasks",
     description="Returns all tasks stored in memory."
 )
-async def task():
+async def get_task():
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM tasks").fetchall()
+    conn.close()
+    tasks = []
+    for row in rows:
+        tasks.append({"id": row[0],
+                      "title": row[1],
+                      "done": bool(row[2])})
     return tasks
 
 
@@ -85,12 +87,17 @@ async def task():
     summary="Get a task",
     description="Returns a single task by its ID."
 )
-async def taskget(id: int):
-
-    for i in tasks:
-        if i["id"] == id:
-            return i
-    raise HTTPException(status_code=404, detail=f"id {id} not found ")
+async def get_task(id: int):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM tasks where id = ?", (id,)).fetchone()
+    conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"id {id} not found ")
+    return {
+        "id": row[0],
+        "title": row[1],
+        "done": bool(row[2])
+    }
 
 
 @app.post(

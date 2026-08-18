@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from pydantic import BaseModel
@@ -113,16 +113,22 @@ async def get_task(id: int):
 )
 async def create_task(task: taskcreate):
     if not task.title.strip():
-        raise HTTPException(
+        return JSONResponse(
             status_code=400,
-            detail="TITLE CAN NOT BE EMPTY"
+            content={"error": "Title cannot be empty"}
         )
-    new_task = {
-        "id": len(tasks)+1,
-        "title": task.title,
-        "done": False}
-    tasks.append(new_task)
-    return new_task
+    conn = get_db()
+    cursor = conn.execute(
+        "INSERT INTO tasks(title, done) VALUES (?,?) ", (task.title.strip(), 0))
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+
+    return {
+        "id": new_id,
+        "title": task.title.strip(),
+        "done": False
+    }
 
 
 @app.put(

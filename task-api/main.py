@@ -137,26 +137,53 @@ async def create_task(task: taskcreate):
     description="Updates the title and/or completion status of a task."
 )
 async def update_task(id: int, task: TaskUpdate):
-    for existing_task in tasks:
-        if existing_task["id"] == id:
+    if task.title is None and task.done is None:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Request body cannot be empty"}
+        )
+    if task.title is not None and not task.title.strip():
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Title cannot be empty"}
+        )
+    conn = get_db()
+    existing_task = conn.execute(
+        "SELECT * FROM tasks where id =?", (id,)).fetchone()
+    if existing_task is None:
+        conn.close()
 
-            if task.title is not None:
-                if not task.title.strip():
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Title cannot be empty"
-                    )
-                existing_task["title"] = task.title
-
-            if task.done is not None:
-                existing_task["done"] = task.done
-
-            return existing_task
-
-    raise HTTPException(
-        status_code=404,
-        detail=f"Task {id} not found"
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"Task {id} not found"}
+        )
+    new_title = (
+        task.title.strip()
+        if task.title is not None
+        else existing_task[1]
     )
+
+    new_done = (
+        int(task.done)
+        if task.done is not None
+        else existing_task[2]
+    )
+    conn.execute(''' UPDATE tasks 
+    SET title =? , done= ?
+    WHERE id=?''', (new_title, new_done, id))
+    conn.commit()
+    updated_task = conn.execute(
+        "SELECT * FROM tasks WHERE id = ?",
+        (id,)
+    ).fetchone()
+
+    conn.close()
+
+    return {
+        "id": updated_task[0],
+        "title": updated_task[1],
+        "done": bool(updated_task[2])
+    }
 
 
 @app.delete(
@@ -166,12 +193,30 @@ async def update_task(id: int, task: TaskUpdate):
     description="Deletes a task by its ID."
 )
 async def delete_task(id: int):
-    for i, task in enumerate(tasks):
-        if task["id"] == id:
-            tasks.pop(i)
-            return
 
-    raise HTTPException(
-        status_code=404,
-        detail=f"Task {id} not found"
+    conn = get_db()
+
+    # Check whether task exists
+    existing_task = conn.execute(
+        "SELECT * FROM tasks WHERE id = ?",
+        (id,)
+    ).fetchone()
+
+    if existing_task is None:
+        conn.close()
+
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"Task {id} not found"}
+        )
+
+    # Delete task
+    conn.execute(
+        "DELETE FROM tasks WHERE id = ?",
+        (id,)
     )
+
+    conn.commit()
+    conn.close()
+
+    return

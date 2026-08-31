@@ -1,25 +1,15 @@
-# Task API
+# Task API — FastAPI + SQLite
 
-A simple CRUD API built with **Python and FastAPI** as part of the **FlyRank AI Backend Internship — Week 2, Assignment 1**.
+A simple CRUD API built with FastAPI and SQLite as part of the FlyRank AI Backend Internship.
 
-The API manages a list of tasks using **in-memory storage**. No database is used in this assignment, so all tasks are reset when the server restarts.
-
-## Features
-
-- Create tasks
-- Read all tasks
-- Read a single task
-- Update tasks
-- Delete tasks
-- Input validation
-- Proper HTTP status codes
-- Interactive Swagger UI documentation
+This project is a continuation of Assignment 1. The API endpoints remain the same, but the storage layer has been migrated from an in-memory Python list to a SQLite database.
 
 ## Tech Stack
 
-- Python 3.10+
+- Python
 - FastAPI
 - Pydantic
+- SQLite
 - Uvicorn
 
 ## Project Structure
@@ -28,35 +18,64 @@ The API manages a list of tasks using **in-memory storage**. No database is used
 task-api/
 │
 ├── main.py
-└── README.md
+├── requirements.txt
+├── README.md
+├── swagger.png
+├── .gitignore
+└── tasks.db          # created automatically, not committed
 ```
+
+## Why SQLite?
+
+SQLite was chosen because it is lightweight and requires zero database-server setup.
+
+The entire database is stored in a single `tasks.db` file, and unlike the in-memory list used in Assignment 1, the data survives when the FastAPI server is stopped and restarted.
+
+## Database
+
+The application uses:
+
+```text
+tasks.db
+```
+
+The database file is created automatically when the application starts.
+
+The `tasks` table is also created automatically if it does not already exist.
+
+The table contains:
+
+| Column | Type | Description |
+|---|---|---|
+| id | INTEGER | Primary key, automatically generated |
+| title | TEXT | Task title |
+| done | INTEGER | Boolean value stored as 0 or 1 |
+
+Three example tasks are inserted only when the table is empty, so restarting the server does not create duplicate seed data.
 
 ## Installation
 
-Clone the repository:
-
-```bash
-git clone https://github.com/pushpam345/flyrank-backend.git
-cd flyrank-backend
-
 Create a virtual environment:
-
-### Windows
 
 ```bash
 python -m venv venv
+```
+
+Activate it on Windows:
+
+```bash
 venv\Scripts\activate
 ```
 
-Install the dependencies:
+Install dependencies:
 
 ```bash
-pip install fastapi uvicorn
+pip install -r requirements.txt
 ```
 
-## Running the API
+## Run the API
 
-Start the server with:
+From the `task-api` directory, run:
 
 ```bash
 uvicorn main:app --reload
@@ -65,147 +84,114 @@ uvicorn main:app --reload
 The API will be available at:
 
 ```text
-http://localhost:8000
+http://127.0.0.1:8000
 ```
 
-## Swagger UI
-
-FastAPI automatically provides interactive API documentation.
-
-Open:
+Swagger documentation:
 
 ```text
-http://localhost:8000/docs
+http://127.0.0.1:8000/docs
 ```
-
-From Swagger UI, you can test the complete CRUD cycle using the **Try it out** button.
 
 ## API Endpoints
 
-| Method | Endpoint | Description | Success |
-|---|---|---|---:|
-| GET | `/` | Returns API information | 200 |
-| GET | `/health` | Checks API health | 200 |
-| GET | `/tasks` | Returns all tasks | 200 |
-| GET | `/tasks/{id}` | Returns a task by ID | 200 |
-| POST | `/tasks` | Creates a new task | 201 |
-| PUT | `/tasks/{id}` | Updates a task | 200 |
-| DELETE | `/tasks/{id}` | Deletes a task | 204 |
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/` | API information |
+| GET | `/health` | Health check |
+| GET | `/tasks` | Get all tasks |
+| GET | `/tasks/{id}` | Get a task by ID |
+| POST | `/tasks` | Create a task |
+| PUT | `/tasks/{id}` | Update a task |
+| DELETE | `/tasks/{id}` | Delete a task |
 
-### Error Status Codes
+## Status Codes
 
-| Status Code | Meaning |
-|---:|---|
-| 400 | Invalid request body or empty title |
-| 404 | Task with the specified ID does not exist |
+- `200` — Successful request
+- `201` — Task successfully created
+- `204` — Task successfully deleted
+- `400` — Invalid request
+- `404` — Task not found
 
-## Example Requests
+## SQLite Storage
 
-### Create a task
+The API uses SQL queries for all CRUD operations.
 
-```http
-POST /tasks
+Examples:
+
+```sql
+SELECT * FROM tasks;
 ```
 
-Request body:
-
-```json
-{
-  "title": "Learn FastAPI"
-}
+```sql
+SELECT * FROM tasks WHERE id = ?;
 ```
 
-Example response:
-
-```json
-{
-  "id": 4,
-  "title": "Learn FastAPI",
-  "done": false
-}
+```sql
+INSERT INTO tasks (title, done) VALUES (?, ?);
 ```
 
-Status:
+```sql
+UPDATE tasks
+SET title = ?, done = ?
+WHERE id = ?;
+```
+
+```sql
+DELETE FROM tasks
+WHERE id = ?;
+```
+
+All user-provided values are passed using parameterized SQL placeholders instead of being directly concatenated into SQL strings.
+
+## Stage 4 — SQL Verification
+
+One SQL query I ran manually in DB Browser for SQLite was:
+
+```sql
+SELECT * FROM tasks;
+```
+
+This returned the same task rows that were being served by the FastAPI `/tasks` endpoint.
+
+I also inserted a task directly through DB Browser and confirmed that it immediately appeared when calling `GET /tasks` through Swagger. This demonstrated that the API and DB Browser were reading from the same SQLite database file.
+
+## DB Browser Screenshot
+
+![SQLite Database in DB Browser](db-browser.png)
+
+## Persistence
+
+Data now survives a server restart because tasks are stored in `tasks.db` instead of a Python list.
+
+For example:
+
+1. Create a task using `POST /tasks`.
+2. Stop the FastAPI server.
+3. Start the server again.
+4. Call `GET /tasks`.
+5. The previously created task is still present.
+
+The database and table are created automatically if they do not exist.
+
+## Assignment 2
+
+This project demonstrates the migration from:
 
 ```text
-201 Created
+Client → FastAPI → Python list
 ```
 
-### Update a task
-
-```http
-PUT /tasks/4
-```
-
-Request body:
-
-```json
-{
-  "done": true
-}
-```
-
-Example response:
-
-```json
-{
-  "id": 4,
-  "title": "Learn FastAPI",
-  "done": true
-}
-```
-
-### Delete a task
-
-```http
-DELETE /tasks/4
-```
-
-Response:
+to:
 
 ```text
-204 No Content
+Client → FastAPI → SQLite database
 ```
 
-## curl Example
+The API endpoints and their behavior remain the same while the storage layer has changed.
 
-Example of checking a task that does not exist:
+## Author
 
-```bash
-curl -i http://localhost:8000/tasks/99
-```
+Pushpam Rastogi
 
-Expected response:
-
-```text
-HTTP/1.1 404 Not Found
-content-type: application/json
-
-{
-  "error": "Task 99 not found"
-}
-```
-
-
-
-## Swagger Screenshot
-
-
-
-
-
-![Swagger UI](swagger.png)
-
-## Data Storage
-
-This project uses an **in-memory Python list** instead of a database.
-
-Therefore, tasks are lost whenever the server is stopped or restarted.
-
-This is intentional because database persistence is outside the scope of this assignment.
-
-## Assignment
-
-**FlyRank AI — Backend Internship**
-
-**Week 2 - Assignment 1: Build your first CRUD API**
+FlyRank AI — Backend Internship

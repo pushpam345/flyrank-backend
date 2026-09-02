@@ -1,44 +1,11 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-
 from pydantic import BaseModel
-import sqlite3
 
+from postgres_repository import PostgresTaskRepository
+
+repository = PostgresTaskRepository()
 DB_NAME = "tasks.db"
-
-
-def get_db():
-    return sqlite3.connect(DB_NAME)
-
-
-def create_table():
-    conn = get_db()
-    conn.execute(""" CREATE TABLE IF NOT EXISTS tasks(
-                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     title TEXT NOT NULL,
-                     done INTEGER NOT NULL)
-                      """)
-    conn.commit()
-    conn.close()
-
-
-def seed_tasks():
-    conn = get_db()
-    count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
-    if count == 0:
-        example_tasks = [
-            ("Learn FastAPI", 0),
-            ("Build CRUD API", 0),
-            ("Push project to GitHub", 0)
-        ]
-        conn.executemany(
-            "INSERT INTO tasks(title,done)VALUES (?,?)", example_tasks)
-        conn.commit()
-    conn.close()
-
-
-create_table()
-seed_tasks()
 
 
 class taskcreate(BaseModel):
@@ -70,18 +37,10 @@ async def yaan():
 @app.get(
     "/tasks",
     summary="Get all tasks",
-    description="Returns all tasks stored in SQLite."
+    description="Returns all tasks stored in PostgreSQL."
 )
 async def get_task():
-    conn = get_db()
-    rows = conn.execute("SELECT * FROM tasks").fetchall()
-    conn.close()
-    tasks = []
-    for row in rows:
-        tasks.append({"id": row[0],
-                      "title": row[1],
-                      "done": bool(row[2])})
-    return tasks
+    return repository.get_all()
 
 
 @app.get(
@@ -90,19 +49,15 @@ async def get_task():
     description="Returns a single task by its ID."
 )
 async def get_task(id: int):
-    conn = get_db()
-    row = conn.execute("SELECT * FROM tasks where id = ?", (id,)).fetchone()
-    conn.close()
-    if row is None:
+    task = repository.get_by_id(id)
+
+    if task is None:
         return JSONResponse(
             status_code=404,
             content={"error": f"Task {id} not found"}
         )
-    return {
-        "id": row[0],
-        "title": row[1],
-        "done": bool(row[2])
-    }
+
+    return task
 
 
 @app.post(
@@ -117,18 +72,8 @@ async def create_task(task: taskcreate):
             status_code=400,
             content={"error": "Title cannot be empty"}
         )
-    conn = get_db()
-    cursor = conn.execute(
-        "INSERT INTO tasks(title, done) VALUES (?,?) ", (task.title.strip(), 0))
-    conn.commit()
-    new_id = cursor.lastrowid
-    conn.close()
 
-    return {
-        "id": new_id,
-        "title": task.title.strip(),
-        "done": False
-    }
+    return repository.create(task.title.strip())
 
 
 @app.put(
@@ -137,53 +82,44 @@ async def create_task(task: taskcreate):
     description="Updates the title and/or completion status of a task."
 )
 async def update_task(id: int, task: TaskUpdate):
+
     if task.title is None and task.done is None:
         return JSONResponse(
             status_code=400,
             content={"error": "Request body cannot be empty"}
         )
+
     if task.title is not None and not task.title.strip():
         return JSONResponse(
             status_code=400,
             content={"error": "Title cannot be empty"}
         )
-    conn = get_db()
-    existing_task = conn.execute(
-        "SELECT * FROM tasks where id =?", (id,)).fetchone()
-    if existing_task is None:
-        conn.close()
 
+    existing_task = repository.get_by_id(id)
+
+    if existing_task is None:
         return JSONResponse(
             status_code=404,
             content={"error": f"Task {id} not found"}
         )
+
     new_title = (
         task.title.strip()
         if task.title is not None
-        else existing_task[1]
+        else existing_task["title"]
     )
 
     new_done = (
-        int(task.done)
+        task.done
         if task.done is not None
-        else existing_task[2]
+        else existing_task["done"]
     )
-    conn.execute(''' UPDATE tasks 
-    SET title =? , done= ?
-    WHERE id=?''', (new_title, new_done, id))
-    conn.commit()
-    updated_task = conn.execute(
-        "SELECT * FROM tasks WHERE id = ?",
-        (id,)
-    ).fetchone()
 
-    conn.close()
-
-    return {
-        "id": updated_task[0],
-        "title": updated_task[1],
-        "done": bool(updated_task[2])
-    }
+    return repository.update(
+        id,
+        new_title,
+        new_done
+    )
 
 
 @app.delete(
@@ -194,29 +130,12 @@ async def update_task(id: int, task: TaskUpdate):
 )
 async def delete_task(id: int):
 
-    conn = get_db()
+    deleted = repository.delete(id)
 
-    # Check whether task exists
-    existing_task = conn.execute(
-        "SELECT * FROM tasks WHERE id = ?",
-        (id,)
-    ).fetchone()
-
-    if existing_task is None:
-        conn.close()
-
+    if not deleted:
         return JSONResponse(
             status_code=404,
             content={"error": f"Task {id} not found"}
         )
-
-    # Delete task
-    conn.execute(
-        "DELETE FROM tasks WHERE id = ?",
-        (id,)
-    )
-
-    conn.commit()
-    conn.close()
 
     return

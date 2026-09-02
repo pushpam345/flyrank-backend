@@ -1,87 +1,361 @@
-# Task API — FastAPI + SQLite
+# Task API
 
-A simple CRUD API built with FastAPI and SQLite as part of the FlyRank AI Backend Internship.
+A simple CRUD REST API built with FastAPI, PostgreSQL, and Docker Compose.
 
-This project is a continuation of Assignment 1. The API endpoints remain the same, but the storage layer has been migrated from an in-memory Python list to a SQLite database.
+The project was developed progressively across three stages:
+
+- **A1:** In-memory task storage
+- **A2:** SQLite database storage
+- **A3:** PostgreSQL running in Docker with a repository layer and persistent Docker volume
+
+In A3, the application was migrated from SQLite to PostgreSQL while keeping the API behavior unchanged.
+
+---
 
 ## Tech Stack
 
 - Python
 - FastAPI
 - Pydantic
-- SQLite
-- Uvicorn
+- PostgreSQL 17
+- Psycopg 3
+- Docker
+- Docker Compose
+- SQLite (used in A2)
+
+---
 
 ## Project Structure
 
 ```text
-task-api/
+flyrank-backend/
 │
-├── main.py
-├── requirements.txt
-├── README.md
-├── swagger.png
+├── .env
+├── .env.example
 ├── .gitignore
-└── tasks.db          # created automatically, not committed
+├── docker-compose.yml
+├── schema.sql
+├── README.md
+│
+└── task-api/
+    ├── main.py
+    ├── database.py
+    ├── repository.py
+    ├── postgres_repository.py
+    ├── Dockerfile
+    └── requirements.txt
 ```
 
-## Why SQLite?
+### Important Files
 
-SQLite was chosen because it is lightweight and requires zero database-server setup.
+| File | Purpose |
+|---|---|
+| `main.py` | FastAPI application and API routes |
+| `database.py` | PostgreSQL connection handling |
+| `repository.py` | Repository interface for task operations |
+| `postgres_repository.py` | PostgreSQL implementation of the repository |
+| `schema.sql` | SQL schema for the `tasks` table |
+| `Dockerfile` | Docker image configuration for FastAPI |
+| `docker-compose.yml` | Runs FastAPI and PostgreSQL together |
+| `.env` | Local environment configuration |
+| `.env.example` | Safe environment configuration template |
+| `.gitignore` | Prevents secrets and local files from being committed |
 
-The entire database is stored in a single `tasks.db` file, and unlike the in-memory list used in Assignment 1, the data survives when the FastAPI server is stopped and restarted.
+---
 
-## Database
+# API Endpoints
 
-The application uses:
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/` | Returns API information |
+| GET | `/health` | Health check |
+| GET | `/tasks` | Returns all tasks |
+| GET | `/tasks/{id}` | Returns a task by ID |
+| POST | `/tasks` | Creates a new task |
+| PUT | `/tasks/{id}` | Updates a task |
+| DELETE | `/tasks/{id}` | Deletes a task |
+
+---
+
+# API Documentation
+
+FastAPI automatically provides interactive Swagger documentation.
+
+After starting the application, open:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+The Swagger interface can be used to test all CRUD endpoints.
+
+---
+
+# Database
+
+## A2 - SQLite
+
+In A2, the application used SQLite as its persistent database.
+
+The database was stored locally in:
 
 ```text
 tasks.db
 ```
 
-The database file is created automatically when the application starts.
+The SQLite implementation provided:
 
-The `tasks` table is also created automatically if it does not already exist.
+- Table creation
+- Seed data
+- Read operations
+- Insert operations
+- Update operations
+- Delete operations
 
-The table contains:
+SQLite was used as an intermediate step before migrating to PostgreSQL.
 
-| Column | Type | Description |
-|---|---|---|
-| id | INTEGER | Primary key, automatically generated |
-| title | TEXT | Task title |
-| done | INTEGER | Boolean value stored as 0 or 1 |
+---
 
-Three example tasks are inserted only when the table is empty, so restarting the server does not create duplicate seed data.
+# A3 - PostgreSQL
 
-## Installation
+In A3, SQLite was replaced with PostgreSQL.
 
-Create a virtual environment:
+PostgreSQL 17 runs inside a Docker container.
 
-```bash
-python -m venv venv
+The database contains a `tasks` table with the following structure:
+
+```sql
+CREATE TABLE IF NOT EXISTS tasks (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    done BOOLEAN NOT NULL DEFAULT FALSE
+);
 ```
 
-Activate it on Windows:
+The schema is defined in:
 
-```bash
-venv\Scripts\activate
+```text
+schema.sql
 ```
 
-Install dependencies:
+---
 
-```bash
-pip install -r requirements.txt
+# Repository Layer
+
+The application uses a repository layer to separate database operations from the FastAPI routes.
+
+The architecture is:
+
+```text
+Client
+   |
+   v
+FastAPI Routes
+   |
+   v
+Repository Interface
+   |
+   v
+PostgresTaskRepository
+   |
+   v
+PostgreSQL
 ```
 
-## Run the API
+The repository provides operations such as:
 
-From the `task-api` directory, run:
-
-```bash
-uvicorn main:app --reload
+```text
+get_all()
+get_by_id()
+create()
+update()
+delete()
 ```
 
-The API will be available at:
+Database-specific SQL queries are implemented inside:
+
+```text
+postgres_repository.py
+```
+
+The database connection is handled by:
+
+```text
+database.py
+```
+
+This keeps database logic separate from the API layer.
+
+---
+
+# Database Connection
+
+The PostgreSQL connection string is provided through the `DATABASE_URL` environment variable.
+
+Inside Docker Compose, the application connects to PostgreSQL using the service name:
+
+```text
+db
+```
+
+The connection string therefore uses:
+
+```text
+postgresql://taskuser:taskpassword@db:5432/tasksdb
+```
+
+The application must use `db:5432` when running inside Docker.
+
+`localhost:5432` would refer to the FastAPI container itself and would not reach the PostgreSQL container.
+
+---
+
+# Environment Variables
+
+Sensitive configuration is stored in `.env`.
+
+Example:
+
+```env
+POSTGRES_USER=taskuser
+POSTGRES_PASSWORD=taskpassword
+POSTGRES_DB=tasksdb
+DATABASE_URL=postgresql://taskuser:taskpassword@db:5432/tasksdb
+```
+
+The `.env` file is ignored by Git and should not be committed.
+
+A safe template is provided as:
+
+```text
+.env.example
+```
+
+Example:
+
+```env
+POSTGRES_USER=taskuser
+POSTGRES_PASSWORD=your_password_here
+POSTGRES_DB=tasksdb
+DATABASE_URL=postgresql://taskuser:your_password_here@db:5432/tasksdb
+```
+
+---
+
+# Docker Compose
+
+The complete application consists of two services:
+
+```text
+┌──────────────────────────┐
+│        task-api          │
+│         FastAPI          │
+│        Port 8000         │
+└────────────┬─────────────┘
+             │
+             │ db:5432
+             ▼
+┌──────────────────────────┐
+│      task-postgres       │
+│       PostgreSQL 17      │
+│        Port 5432         │
+└────────────┬─────────────┘
+             │
+             ▼
+      postgres_data
+       Docker Volume
+```
+
+The services communicate using the Docker Compose network.
+
+The PostgreSQL service is named:
+
+```text
+db
+```
+
+The container itself is named:
+
+```text
+task-postgres
+```
+
+---
+
+# Docker Volume
+
+PostgreSQL uses a named Docker volume:
+
+```yaml
+volumes:
+  - postgres_data:/var/lib/postgresql/data
+```
+
+The volume stores PostgreSQL's database files outside the lifecycle of the PostgreSQL container.
+
+This means that removing and recreating the container does not remove the database data.
+
+The volume can be viewed using:
+
+```cmd
+docker volume ls
+```
+
+---
+
+# Running the Application
+
+## Prerequisites
+
+Install:
+
+- Docker Desktop
+- Docker Compose
+
+A separate PostgreSQL installation is not required because PostgreSQL runs inside Docker.
+
+---
+
+## Start the Complete Stack
+
+From the project root directory:
+
+```cmd
+docker compose up -d --build
+```
+
+This command:
+
+1. Builds the FastAPI Docker image.
+2. Creates the Docker network.
+3. Starts the PostgreSQL container.
+4. Starts the FastAPI container.
+5. Connects the application to PostgreSQL.
+
+---
+
+## Check Running Containers
+
+Run:
+
+```cmd
+docker compose ps
+```
+
+Expected services:
+
+```text
+task-api
+task-postgres
+```
+
+Both containers should show a running status.
+
+---
+
+# Access the API
+
+The FastAPI application is available at:
 
 ```text
 http://127.0.0.1:8000
@@ -93,105 +367,427 @@ Swagger documentation:
 http://127.0.0.1:8000/docs
 ```
 
-## API Endpoints
+Health check:
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/` | API information |
-| GET | `/health` | Health check |
-| GET | `/tasks` | Get all tasks |
-| GET | `/tasks/{id}` | Get a task by ID |
-| POST | `/tasks` | Create a task |
-| PUT | `/tasks/{id}` | Update a task |
-| DELETE | `/tasks/{id}` | Delete a task |
+```text
+http://127.0.0.1:8000/health
+```
 
-## Status Codes
+---
 
-- `200` — Successful request
-- `201` — Task successfully created
-- `204` — Task successfully deleted
-- `400` — Invalid request
-- `404` — Task not found
+# Access PostgreSQL
 
-## SQLite Storage
+PostgreSQL can be accessed directly from the running container using:
 
-The API uses SQL queries for all CRUD operations.
+```cmd
+docker exec -it task-postgres psql -U taskuser -d tasksdb
+```
 
-Examples:
+Once inside `psql`, view all tasks:
 
 ```sql
 SELECT * FROM tasks;
 ```
 
-```sql
-SELECT * FROM tasks WHERE id = ?;
-```
+View the table structure:
 
 ```sql
-INSERT INTO tasks (title, done) VALUES (?, ?);
+\d tasks
 ```
+
+List all tables:
 
 ```sql
-UPDATE tasks
-SET title = ?, done = ?
-WHERE id = ?;
+\dt
 ```
+
+Exit PostgreSQL:
 
 ```sql
-DELETE FROM tasks
-WHERE id = ?;
+\q
 ```
 
-All user-provided values are passed using parameterized SQL placeholders instead of being directly concatenated into SQL strings.
+---
 
-## Stage 4 — SQL Verification
+# CRUD Testing
 
-One SQL query I ran manually in DB Browser for SQLite was:
+The CRUD endpoints were tested through Swagger UI.
+
+## Create a Task
+
+`POST /tasks`
+
+Example request:
+
+```json
+{
+    "title": "Learn Docker"
+}
+```
+
+Example response:
+
+```json
+{
+    "id": 1,
+    "title": "Learn Docker",
+    "done": false
+}
+```
+
+---
+
+## Get All Tasks
+
+`GET /tasks`
+
+Example response:
+
+```json
+[
+    {
+        "id": 1,
+        "title": "Learn Docker",
+        "done": false
+    }
+]
+```
+
+---
+
+## Get a Task
+
+`GET /tasks/{id}`
+
+Example:
+
+```text
+GET /tasks/1
+```
+
+---
+
+## Update a Task
+
+`PUT /tasks/{id}`
+
+Example request:
+
+```json
+{
+    "title": "Learn Docker Compose",
+    "done": true
+}
+```
+
+---
+
+## Delete a Task
+
+`DELETE /tasks/{id}`
+
+Example:
+
+```text
+DELETE /tasks/1
+```
+
+The endpoint returns:
+
+```text
+204 No Content
+```
+
+when the task is successfully deleted.
+
+---
+
+# Data Persistence Test
+
+One of the main requirements of A3 was to demonstrate that PostgreSQL data survives container recreation.
+
+The persistence test was performed as follows.
+
+## Step 1 - Create Data
+
+A task was created through the API.
+
+Example:
+
+```json
+{
+    "title": "Persistence Test"
+}
+```
+
+---
+
+## Step 2 - Verify the Data
+
+The task was verified directly in PostgreSQL:
 
 ```sql
 SELECT * FROM tasks;
 ```
 
-This returned the same task rows that were being served by the FastAPI `/tasks` endpoint.
+---
 
-I also inserted a task directly through DB Browser and confirmed that it immediately appeared when calling `GET /tasks` through Swagger. This demonstrated that the API and DB Browser were reading from the same SQLite database file.
+## Step 3 - Remove the Containers
 
-## DB Browser Screenshot
+The application and database containers were removed using:
 
-![SQLite Database in DB Browser](db-browser.png)
-
-## Persistence
-
-Data now survives a server restart because tasks are stored in `tasks.db` instead of a Python list.
-
-For example:
-
-1. Create a task using `POST /tasks`.
-2. Stop the FastAPI server.
-3. Start the server again.
-4. Call `GET /tasks`.
-5. The previously created task is still present.
-
-The database and table are created automatically if they do not exist.
-
-## Assignment 2
-
-This project demonstrates the migration from:
-
-```text
-Client → FastAPI → Python list
+```cmd
+docker compose down
 ```
 
-to:
+This removes the containers and Docker network but keeps the named PostgreSQL volume.
 
-```text
-Client → FastAPI → SQLite database
+---
+
+## Step 4 - Start the Stack Again
+
+The complete stack was started again:
+
+```cmd
+docker compose up -d
 ```
 
-The API endpoints and their behavior remain the same while the storage layer has changed.
+---
 
-## Author
+## Step 5 - Verify the Data Again
 
-Pushpam Rastogi
+The PostgreSQL database was queried again:
 
-FlyRank AI — Backend Internship
+```cmd
+docker exec -it task-postgres psql -U taskuser -d tasksdb
+```
+
+Then:
+
+```sql
+SELECT * FROM tasks;
+```
+
+The previously created rows were still present.
+
+Therefore, the database data successfully survived PostgreSQL container recreation.
+
+---
+
+# Persistence Architecture
+
+```text
+Before Restart
+
+task-postgres
+      |
+      v
+postgres_data
+      |
+      v
+Tasks
+
+
+docker compose down
+      |
+      v
+task-postgres container removed
+      |
+      |
+      └───────────────┐
+                      │
+              postgres_data
+                  remains
+                      │
+                      ▼
+              docker compose up
+                      |
+                      ▼
+              New PostgreSQL
+                  container
+                      |
+                      ▼
+              Same task data
+```
+
+> **Important:** Do not use `docker compose down -v` when testing persistence. The `-v` option removes the named volume and therefore deletes the persisted database data.
+
+---
+
+# Docker Networking
+
+The FastAPI and PostgreSQL services run in separate containers.
+
+Inside the Docker Compose network:
+
+```text
+task-api
+   |
+   | db:5432
+   v
+task-postgres
+```
+
+The PostgreSQL service is reachable using the Compose service name:
+
+```text
+db
+```
+
+Therefore:
+
+```text
+postgresql://taskuser:taskpassword@db:5432/tasksdb
+```
+
+is used by the FastAPI container.
+
+Using:
+
+```text
+localhost:5432
+```
+
+inside the FastAPI container would be incorrect because `localhost` refers to the FastAPI container itself.
+
+---
+
+# Application Architecture
+
+## A1 - In-Memory Storage
+
+```text
+Client
+   |
+   v
+FastAPI
+   |
+   v
+Python List
+```
+
+Data was lost whenever the application restarted.
+
+---
+
+## A2 - SQLite
+
+```text
+Client
+   |
+   v
+FastAPI
+   |
+   v
+SQLite
+   |
+   v
+tasks.db
+```
+
+The data became persistent using a local SQLite database.
+
+---
+
+## A3 - PostgreSQL + Docker
+
+```text
+Client
+   |
+   v
+FastAPI
+   |
+   v
+Repository Layer
+   |
+   v
+PostgreSQL
+   |
+   v
+Docker Volume
+```
+
+The final architecture provides:
+
+- Database persistence
+- Containerized PostgreSQL
+- Repository-based database access
+- Environment-based configuration
+- Reproducible application setup using Docker Compose
+
+---
+
+# Stopping the Application
+
+To stop and remove the containers while preserving the database volume:
+
+```cmd
+docker compose down
+```
+
+To start the application again:
+
+```cmd
+docker compose up -d
+```
+
+To rebuild the application after code changes:
+
+```cmd
+docker compose up -d --build
+```
+
+> Avoid `docker compose down -v` unless you intentionally want to delete the PostgreSQL volume and its data.
+
+---
+
+# Verification
+
+The following checks were performed during A3:
+
+- PostgreSQL 17 running successfully in Docker
+- PostgreSQL `tasks` table created successfully
+- FastAPI container successfully connected to PostgreSQL
+- `DATABASE_URL` successfully configured through `.env`
+- FastAPI CRUD operations tested through Swagger
+- PostgreSQL data verified directly using `psql`
+- Docker Compose successfully started both services
+- PostgreSQL data remained available after `docker compose down` and `docker compose up`
+- Persistent Docker volume verified
+
+---
+
+# A3 Summary
+
+A2's SQLite storage was replaced with PostgreSQL running in Docker.
+
+The final setup provides a reproducible two-container application stack:
+
+```text
+┌───────────────┐
+│    FastAPI    │
+│   task-api    │
+└───────┬───────┘
+        │
+        │ DATABASE_URL
+        │ db:5432
+        ▼
+┌───────────────┐
+│  PostgreSQL   │
+│ task-postgres │
+└───────┬───────┘
+        │
+        ▼
+┌───────────────┐
+│ postgres_data │
+│ Docker Volume │
+└───────────────┘
+```
+
+The entire stack can be started with a single command:
+
+```cmd
+docker compose up -d --build
+```
+
+The database persists across container recreation through the Docker volume.

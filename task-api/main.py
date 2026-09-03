@@ -1,11 +1,21 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 from postgres_repository import PostgresTaskRepository
-
+from supabase_client import supabase
 repository = PostgresTaskRepository()
 DB_NAME = "tasks.db"
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class SignupRequest(BaseModel):
+    email: EmailStr
+    password: str
 
 
 class taskcreate(BaseModel):
@@ -139,3 +149,65 @@ async def delete_task(id: int):
         )
 
     return
+
+
+@app.post(
+    "/auth/signup",
+    status_code=201,
+    summary="Create a new account",
+    description="Creates a new user account using Supabase Auth."
+)
+async def signup(data: SignupRequest):
+    if not data.email or not data.password.strip():
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Email and password are required"}
+        )
+    try:
+        response = supabase.auth.sign_up(
+            {
+                "email": str(data.email),
+                "password": data.password
+            }
+        )
+        return {
+            "user": response.user
+        }
+    except Exception:
+        return JSONResponse(
+        status_code=400,
+        content={"error": "Unable to create account"}
+    )
+
+
+@app.post(
+    "/auth/login",
+    summary="Login to an existing account",
+    description="Authenticates a user using Supabase Auth."
+)
+async def login(data: LoginRequest):
+
+    if not data.email or not data.password.strip():
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Email and password are required"}
+        )
+
+    try:
+        response = supabase.auth.sign_in_with_password(
+            {
+                "email": str(data.email),
+                "password": data.password
+            }
+        )
+
+        return {
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token
+        }
+
+    except Exception:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Invalid login credentials"}
+        )

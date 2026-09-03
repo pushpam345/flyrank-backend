@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from fastapi.security import HTTPBearer,HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 
@@ -32,6 +33,7 @@ app = FastAPI(
     description="A simple CRUD API for managing tasks.",
     version="1.0.0"
 )
+security=HTTPBearer(auto_error=False)
 
 
 @app.get("/")
@@ -43,6 +45,34 @@ async def hello():
 async def yaan():
     return {"status": "ok"}
 
+@app.get(
+    "/public/info",
+    summary="Public information",
+    description="A public endpoint that does not require authentication."
+)
+async def public_info():
+    return {
+        "message": "This is a public endpoint."
+    }
+
+@app.get(
+        "/protected/profile",
+        summary="Protected profile",
+        description="Requires a bearer access token"
+)
+async def protected_profile(
+    credentials:HTTPAuthorizationCredentials| None=Depends(security)
+):
+    if credentials is None:
+        return JSONResponse(
+            status_code=401,
+            content={"error":"Access token required"}
+        )
+    return {
+        "message":"you provided an access token",
+        "token_type":credentials.scheme
+    }
+    
 
 @app.get(
     "/tasks",

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends
-from fastapi.security import HTTPBearer,HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 
@@ -33,7 +33,7 @@ app = FastAPI(
     description="A simple CRUD API for managing tasks.",
     version="1.0.0"
 )
-security=HTTPBearer(auto_error=False)
+security = HTTPBearer(auto_error=False)
 
 
 @app.get("/")
@@ -45,6 +45,7 @@ async def hello():
 async def yaan():
     return {"status": "ok"}
 
+
 @app.get(
     "/public/info",
     summary="Public information",
@@ -54,6 +55,7 @@ async def public_info():
     return {
         "message": "This is a public endpoint."
     }
+
 
 @app.get(
     "/protected/profile",
@@ -88,7 +90,7 @@ async def protected_profile(
             status_code=401,
             content={"error": "Invalid or expired token"}
         )
-    
+
 
 @app.get(
     "/tasks",
@@ -221,9 +223,9 @@ async def signup(data: SignupRequest):
         }
     except Exception:
         return JSONResponse(
-        status_code=400,
-        content={"error": "Unable to create account"}
-    )
+            status_code=400,
+            content={"error": "Unable to create account"}
+        )
 
 
 @app.post(

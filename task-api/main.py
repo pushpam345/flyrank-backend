@@ -56,22 +56,38 @@ async def public_info():
     }
 
 @app.get(
-        "/protected/profile",
-        summary="Protected profile",
-        description="Requires a bearer access token"
+    "/protected/profile",
+    summary="Protected profile",
+    description="Requires a valid Supabase access token."
 )
 async def protected_profile(
-    credentials:HTTPAuthorizationCredentials| None=Depends(security)
+    credentials: HTTPAuthorizationCredentials | None = Depends(security)
 ):
     if credentials is None:
         return JSONResponse(
             status_code=401,
-            content={"error":"Access token required"}
+            content={"error": "Access token required"}
         )
-    return {
-        "message":"you provided an access token",
-        "token_type":credentials.scheme
-    }
+
+    try:
+        response = supabase.auth.get_user(credentials.credentials)
+
+        user = response.user
+
+        if user is None:
+            raise Exception("User not found")
+
+        return {
+            "id": user.id,
+            "email": user.email,
+            "created_at": user.created_at
+        }
+
+    except Exception:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Invalid or expired token"}
+        )
     
 
 @app.get(
